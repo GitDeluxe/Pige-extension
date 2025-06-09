@@ -1,8 +1,15 @@
 document.addEventListener('DOMContentLoaded', function() {
-  // Load saved webhook URL if available
-  chrome.storage.local.get(['webhookUrl'], function(result) {
+  // Load saved webhook URL and mode if available
+  chrome.storage.local.get(['webhookUrl', 'isProductionMode'], function(result) {
     if (result.webhookUrl) {
       document.getElementById('webhook-url').value = result.webhookUrl;
+    }
+    
+    // Set the mode toggle based on saved preference
+    const modeToggle = document.getElementById('mode-toggle');
+    if (result.isProductionMode !== undefined) {
+      modeToggle.checked = result.isProductionMode;
+      updateWebhookUrls(result.isProductionMode);
     }
   });
 
@@ -11,6 +18,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('refresh-token').addEventListener('click', refreshToken);
   document.getElementById('clear-tokens').addEventListener('click', clearTokens);
   document.getElementById('show-all-tokens').addEventListener('click', showAllTokens);
+  document.getElementById('mode-toggle').addEventListener('change', toggleMode);
   
   // Charger automatiquement le token au démarrage
   refreshToken();
@@ -116,12 +124,51 @@ function showAllTokens() {
   });
 }
 
+// Function to toggle between test and production modes
+function toggleMode(event) {
+  const isProductionMode = event.target.checked;
+  
+  // Save the mode preference
+  chrome.storage.local.set({ isProductionMode: isProductionMode });
+  
+  // Update webhook URLs
+  updateWebhookUrls(isProductionMode);
+  
+  // Show status message
+  showStatus(`Mode ${isProductionMode ? 'Production' : 'Test'} activé`, 'success');
+}
+
+// Function to update webhook URLs based on mode
+function updateWebhookUrls(isProductionMode) {
+  const webhookSelect = document.getElementById('webhook-url');
+  const options = webhookSelect.options;
+  
+  for (let i = 0; i < options.length; i++) {
+    const currentUrl = options[i].value;
+    
+    if (isProductionMode) {
+      // Switch from test to production
+      if (currentUrl.includes('/webhook-test/')) {
+        options[i].value = currentUrl.replace('/webhook-test/', '/webhook/');
+        options[i].textContent = options[i].textContent.replace('test-', '');
+      }
+    } else {
+      // Switch from production to test
+      if (currentUrl.includes('/webhook/')) {
+        options[i].value = currentUrl.replace('/webhook/', '/webhook-test/');
+        options[i].textContent = 'test-' + options[i].textContent;
+      }
+    }
+  }
+}
+
 // Function to send the webhook
 function sendWebhook() {
   const webhookUrl = document.getElementById('webhook-url').value.trim();
   const selectedName = document.getElementById('name-select').value;
   const bearerToken = document.getElementById('bearer-token').dataset.fullToken;
   const statusMessage = document.getElementById('status-message');
+  const isProductionMode = document.getElementById('mode-toggle').checked;
   
   // Validate inputs
   if (!webhookUrl) {
